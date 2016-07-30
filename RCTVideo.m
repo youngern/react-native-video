@@ -87,7 +87,7 @@ static NSString *const playbackRate = @"rate";
 
 - (AVPlayerViewController*)createPlayerViewController:(AVPlayer*)player withPlayerItem:(AVPlayerItem*)playerItem {
     RCTVideoPlayerViewController* playerLayer= [[RCTVideoPlayerViewController alloc] init];
-    playerLayer.showsPlaybackControls = NO;
+    playerLayer.showsPlaybackControls = _controls;
     playerLayer.rctDelegate = self;
     playerLayer.view.frame = self.bounds;
     playerLayer.player = _player;
