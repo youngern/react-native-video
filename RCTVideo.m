@@ -87,7 +87,7 @@ static NSString *const playbackRate = @"rate";
 
 - (AVPlayerViewController*)createPlayerViewController:(AVPlayer*)player withPlayerItem:(AVPlayerItem*)playerItem {
     RCTVideoPlayerViewController* playerLayer= [[RCTVideoPlayerViewController alloc] init];
-    playerLayer.showsPlaybackControls = NO;
+    playerLayer.showsPlaybackControls = _controls;
     playerLayer.rctDelegate = self;
     playerLayer.view.frame = self.bounds;
     playerLayer.player = _player;
@@ -213,6 +213,7 @@ static NSString *const playbackRate = @"rate";
   [_playerItem addObserver:self forKeyPath:statusKeyPath options:0 context:nil];
   [_playerItem addObserver:self forKeyPath:playbackBufferEmptyKeyPath options:0 context:nil];
   [_playerItem addObserver:self forKeyPath:playbackLikelyToKeepUpKeyPath options:0 context:nil];
+    
   _playerItemObserversSet = YES;
 }
 
@@ -371,6 +372,23 @@ static NSString *const playbackRate = @"rate";
                                                   body:@{@"playbackRate": [NSNumber numberWithFloat:_player.rate],
                                                          @"target": self.reactTag}];
               _playbackStalled = NO;
+          }
+      }
+  } else if (object == _playerViewController.contentOverlayView) {
+      //https://stackoverflow.com/questions/26330287/how-to-detect-fullscreen-mode-of-avplayerviewcontroller
+      if ([keyPath isEqualToString:@"bounds"]) {
+          CGRect oldBounds = [change[NSKeyValueChangeOldKey] CGRectValue], newBounds = [change[NSKeyValueChangeNewKey] CGRectValue];
+          BOOL wasFullscreen = CGRectEqualToRect(oldBounds, [UIScreen mainScreen].bounds), isFullscreen = CGRectEqualToRect(newBounds, [UIScreen mainScreen].bounds);
+          if (isFullscreen && !wasFullscreen) {
+              _fullscreenPlayerPresented = YES;
+              [_eventDispatcher sendInputEventWithName:@"onVideoFullscreenPlayerDidPresent" body:@{@"target": self.reactTag}];
+              
+          }
+          else if (!isFullscreen && wasFullscreen) {
+              _fullscreenPlayerPresented = false;
+              _presentingViewController = nil;
+              [self applyModifiers];
+              [_eventDispatcher sendInputEventWithName:@"onVideoFullscreenPlayerDidDismiss" body:@{@"target": self.reactTag}];
           }
       }
   } else {
@@ -579,6 +597,7 @@ static NSString *const playbackRate = @"rate";
     {
         _playerViewController = [self createPlayerViewController:_player withPlayerItem:_playerItem];
         [self addSubview:_playerViewController.view];
+        [_playerViewController.contentOverlayView addObserver:self forKeyPath:@"bounds" options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionOld context:NULL];
     }
 }
 
@@ -620,6 +639,7 @@ static NSString *const playbackRate = @"rate";
 {
     [_playerLayer removeFromSuperlayer];
     [_playerLayer removeObserver:self forKeyPath:readyForDisplayKeyPath];
+    [_playerViewController.contentOverlayView removeObserver:self forKeyPath:@"bounds"];
     _playerLayer = nil;
 }
 
@@ -627,6 +647,7 @@ static NSString *const playbackRate = @"rate";
 
 - (void)videoPlayerViewControllerWillDismiss:(AVPlayerViewController *)playerViewController
 {
+    NSLog(@"will dismiss");
     if (_playerViewController == playerViewController && _fullscreenPlayerPresented)
     {
         [_eventDispatcher sendInputEventWithName:@"onVideoFullscreenPlayerWillDismiss" body:@{@"target": self.reactTag}];
